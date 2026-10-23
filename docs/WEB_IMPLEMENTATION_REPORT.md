@@ -110,17 +110,23 @@ myspoti-main/
 
 ---
 
-## 5. Security & Authentication Model
+## 5. Security & Authentication Architecture (Individual User PKCE)
 
-1. **PKCE OAuth 2.0 (Proof Key for Code Exchange)**:
-   - Uses Web Crypto API (`crypto.getRandomValues` and `crypto.subtle.digest("SHA-256")`).
-   - Verifier stored in `sessionStorage` during authorization flow.
-   - **Zero Client Secrets**: No secrets are stored in the client codebase or transmitted over the wire.
-2. **Token Security**:
-   - Spotify Access Tokens and Refresh Tokens stored securely in browser `localStorage`.
-   - Never logged to console, never exposed in URLs after the initial `/callback` redirect exchange.
-3. **Content Security & Headers**:
-   - Safe HTTP headers configured in `vercel.json` and Next.js configuration.
+1. **PKCE OAuth 2.0 (Proof Key for Code Exchange — RFC 7636)**:
+   - **Code Verifier**: 64-character cryptographically random unreserved string generated via `window.crypto.getRandomValues`.
+   - **Code Challenge**: SHA-256 digest of verifier converted using URL-safe base64 encoding (`S256`).
+   - **OAuth State Parameter**: 32-character random string generated and persisted in `sessionStorage` and validated on callback to prevent CSRF attacks.
+   - **Zero Client Secrets**: No client secrets are stored in the client codebase, bundle, or transmitted across the wire.
+2. **Token Lifecycle & Automatic Refresh**:
+   - Access tokens (1-hour lifespan) and refresh tokens stored securely in browser `localStorage`.
+   - `getValidAccessToken()` checks expiry with a 60-second safety window and calls Spotify's `/api/token` with `grant_type=refresh_token` to maintain uninterrupted sessions across reloads.
+3. **Per-User Isolation**:
+   - Data in `localStorage` for Music Inbox, Listening Plans, and Sound Atlas is keyed by user ID (`wvl_music_inbox_${user.id}`, `wvl_listening_plans_${user.id}`, etc.).
+   - Switching accounts or logging out prevents cross-user data leakage.
+4. **Honest Playback & Diagnostics**:
+   - Audio operations invoke real Spotify Connect endpoints (`/v1/me/player/play`, `/pause`, `/next`, `/previous`, `/seek`, `/volume`).
+   - Active device detection alerts users when no Spotify app is currently running (`NO_ACTIVE_DEVICE`).
+   - Spotify Premium requirements are transparently communicated when direct Web API control is attempted on Free tier accounts.
 
 ---
 
@@ -129,22 +135,25 @@ myspoti-main/
 | Check / Test | Command / Method | Status | Notes |
 |:---|:---|:---|:---|
 | **Android Build Intact** | Verified file tree & Gradle config | **PASSED** | `base/` unmodified; zero Gradle or Kotlin breakage. |
-| **TypeScript Compilation** | `npx tsc --noEmit` | **PASSED** | 0 errors across all 10 pages and components. |
-| **Next.js Production Build**| `npm run build` | **PASSED** | Compiled static assets and server routes cleanly. |
-| **Vercel CLI Deployment** | `npx vercel --prod --yes` | **PASSED** | Production deployment completed in 15 seconds. |
-| **Live URL Health Check** | `curl -I https://web-fawn-five-77.vercel.app` | **PASSED** | HTTP 200 OK with valid HTML payload. |
-| **PWA Manifest & Icons** | Inspected `/manifest.json` & `/icon.svg` | **PASSED** | Valid JSON manifest and scalable SVG icon. |
+| **Next.js Production Build**| `npm run build` | **PASSED** | All 10 routes compiled and type-checked cleanly. |
+| **Vercel Production Deploy** | `npx vercel --prod --yes` | **PASSED** | Production deployment verified at `https://web-fawn-five-77.vercel.app`. |
+| **Live URL Health Check** | `curl -I https://web-fawn-five-77.vercel.app` | **PASSED** | HTTP 200 OK with valid SSR and hydration payload. |
+| **PKCE State Validation** | Verified in `spotifyAuth.ts` & `/callback` | **PASSED** | Rejects forged states, verifies SHA-256 verifier. |
+| **User Data Isolation** | Inspected user scoping in `storage.ts` | **PASSED** | Keys scoped per `user.id`. |
 
 ---
 
-## 7. Spotify Developer App Configuration
+## 7. Spotify Developer Dashboard Setup
 
-To enable live Spotify Connect playback and catalog search:
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Open your registered Spotify App.
-3. In **Settings -> Redirect URIs**, add:
+To connect live Spotify accounts to WhenVanshListens:
+1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Open your registered Spotify App (or click **Create App**).
+3. In **Settings -> Redirect URIs**, add both URIs:
    ```text
    https://web-fawn-five-77.vercel.app/callback
    http://localhost:3000/callback
    ```
-4. Set the `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` environment variable in your Vercel Project Settings (or directly in `.env.local` for local development).
+4. Copy the **Client ID** and either:
+   - Enter it in Vercel Project Environment Variables as `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`, OR
+   - Enter it in WhenVanshListens Web directly when clicking "Continue with Spotify" via the built-in configuration modal.
+5. In **User Management** (if app is in Development Mode in Spotify Dashboard): add the Spotify account emails of any testers you wish to allow to log in. (Once published or extended, any Spotify user can log in).

@@ -19,8 +19,15 @@ import {
   getStoredHistory, 
   getExploredAlbums, 
   getExploredArtists, 
-  buildAtlasGraphData 
+  buildAtlasGraphData,
+  buildAtlasGraphFromSpotifyData,
+  syncSpotifyRecentHistory
 } from '@/lib/storage';
+import { 
+  getUserTopArtists, 
+  getUserTopTracks, 
+  getRecentlyPlayedTracks 
+} from '@/lib/spotifyApi';
 import { 
   ListeningHistoryEntry, 
   HistoryAlbum, 
@@ -31,7 +38,7 @@ import {
 } from '@/types/music';
 
 export default function SoundAtlasPage() {
-  const { currentTrack, isPlaying, togglePlay, playTrack } = usePlayer();
+  const { user, isAuthenticated, currentTrack, isPlaying, togglePlay, playTrack } = usePlayer();
   const [viewMode, setViewMode] = useState<'history' | 'map'>('history');
   const [history, setHistory] = useState<ListeningHistoryEntry[]>([]);
   const [albums, setAlbums] = useState<HistoryAlbum[]>([]);
@@ -41,23 +48,64 @@ export default function SoundAtlasPage() {
   const [selectedNode, setSelectedNode] = useState<AtlasNode | null>(null);
   const [filterType, setFilterType] = useState<AtlasNodeType | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const refreshData = () => {
-    const hist = getStoredHistory();
-    setHistory(hist);
-    setAlbums(getExploredAlbums(hist));
-    setArtists(getExploredArtists(hist));
-    const graph = buildAtlasGraphData(hist);
-    setNodes(graph.nodes);
-    setEdges(graph.edges);
-    if (graph.nodes.length > 0 && !selectedNode) {
-      setSelectedNode(graph.nodes[0]);
+  const refreshData = async () => {
+    setIsLoading(true);
+    const userId = user?.id || null;
+    let hist = getStoredHistory(userId);
+
+    if (isAuthenticated) {
+      try {
+        const [recent, topArtists, topTracks] = await Promise.all([
+          getRecentlyPlayedTracks(25),
+          getUserTopArtists(8),
+          getUserTopTracks(15),
+        ]);
+
+        if (recent.length > 0) {
+          hist = syncSpotifyRecentHistory(recent, userId);
+        }
+
+        setHistory(hist);
+        setAlbums(getExploredAlbums(hist));
+        setArtists(getExploredArtists(hist));
+
+        const graph = (topArtists.length > 0 || topTracks.length > 0)
+          ? buildAtlasGraphFromSpotifyData(topArtists, topTracks, recent)
+          : buildAtlasGraphData(hist);
+
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
+        if (graph.nodes.length > 0) {
+          setSelectedNode(graph.nodes[0]);
+        }
+      } catch (err) {
+        console.warn('Atlas Spotify sync warning:', err);
+        setHistory(hist);
+        setAlbums(getExploredAlbums(hist));
+        setArtists(getExploredArtists(hist));
+        const graph = buildAtlasGraphData(hist);
+        setNodes(graph.nodes);
+        setEdges(graph.edges);
+      }
+    } else {
+      setHistory(hist);
+      setAlbums(getExploredAlbums(hist));
+      setArtists(getExploredArtists(hist));
+      const graph = buildAtlasGraphData(hist);
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+      if (graph.nodes.length > 0 && !selectedNode) {
+        setSelectedNode(graph.nodes[0]);
+      }
     }
+    setIsLoading(false);
   };
 
   useEffect(() => {
     refreshData();
-  }, [currentTrack]);
+  }, [user, isAuthenticated, currentTrack]);
 
   const filteredHistory = history.filter(
     (h) =>

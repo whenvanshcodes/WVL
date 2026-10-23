@@ -28,6 +28,10 @@ import { saveInboxItem, addTrackToPlan, getStoredPlans } from '@/lib/storage';
 export function NowPlayingExpanded() {
   const router = useRouter();
   const {
+    user,
+    activeDevice,
+    playbackError,
+    clearPlaybackError,
     currentTrack,
     isPlaying,
     positionMs,
@@ -67,17 +71,17 @@ export function NowPlayingExpanded() {
       note: 'Saved from Listening Space player.',
       status: 'TO_LISTEN',
       resolvedTrack: currentTrack,
-    });
+    }, user?.id);
     showToast('Saved to Music Inbox');
   };
 
   const handleAddToPlan = () => {
-    const plans = getStoredPlans();
+    const plans = getStoredPlans(user?.id);
     if (plans.length > 0) {
-      addTrackToPlan(plans[0].id, currentTrack);
+      addTrackToPlan(plans[0].id, currentTrack, user?.id);
       showToast(`Added to "${plans[0].title}"`);
     } else {
-      showToast('Created new plan');
+      showToast('No active listening plans found');
     }
   };
 
@@ -135,6 +139,25 @@ export function NowPlayingExpanded() {
           </button>
         </div>
       </header>
+
+      {/* Active Device and Diagnostics Bar */}
+      <div className="w-full max-w-xl mx-auto">
+        {activeDevice && (
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-text-muted font-mono mb-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Playing on {activeDevice.name}</span>
+          </div>
+        )}
+        {playbackError && (
+          <div className="p-3 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 text-center">
+            {playbackError === 'NO_ACTIVE_DEVICE'
+              ? 'No active Spotify device found. Open Spotify on any device to stream.'
+              : playbackError === 'PREMIUM_REQUIRED'
+              ? 'Spotify Premium is required for direct Web API playback control.'
+              : playbackError}
+          </div>
+        )}
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col justify-center items-center w-full max-w-xl mx-auto my-auto py-2">

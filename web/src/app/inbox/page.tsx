@@ -32,7 +32,7 @@ const STATUS_TABS: { label: string; status: InboxStatus | 'ALL' }[] = [
 ];
 
 export default function MusicInboxPage() {
-  const { playTrack } = usePlayer();
+  const { user, playTrack } = usePlayer();
   const [items, setItems] = useState<InboxItem[]>([]);
   const [selectedTab, setSelectedTab] = useState<InboxStatus | 'ALL'>('ALL');
   const [isAdding, setIsAdding] = useState(false);
@@ -42,19 +42,23 @@ export default function MusicInboxPage() {
   const [note, setNote] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const reload = () => setItems(getStoredInbox());
+  const reload = () => setItems(getStoredInbox(user?.id));
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [user]);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
 
-    // Smart fallback if title empty: parse URL
+    let derivedSubtitle = artist.trim();
+    try {
+      if (!derivedSubtitle) derivedSubtitle = new URL(url).hostname;
+    } catch {
+      if (!derivedSubtitle) derivedSubtitle = 'External Link';
+    }
     const derivedTitle = title.trim() || 'Saved Music Link';
-    const derivedSubtitle = artist.trim() || new URL(url).hostname;
 
     saveInboxItem({
       originalUrl: url.trim(),
@@ -63,7 +67,7 @@ export default function MusicInboxPage() {
       artworkUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
       note: note.trim(),
       status: 'TO_LISTEN',
-    });
+    }, user?.id);
 
     setUrl('');
     setTitle('');
@@ -74,12 +78,12 @@ export default function MusicInboxPage() {
   };
 
   const handleStatusChange = (id: string, newStatus: InboxStatus) => {
-    updateInboxStatus(id, newStatus);
+    updateInboxStatus(id, newStatus, user?.id);
     reload();
   };
 
   const handleDelete = (id: string) => {
-    removeInboxItem(id);
+    removeInboxItem(id, user?.id);
     reload();
   };
 

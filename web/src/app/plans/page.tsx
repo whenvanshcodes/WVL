@@ -21,17 +21,17 @@ import {
 import { ListeningPlan } from '@/types/music';
 
 export default function ListeningPlansPage() {
-  const { playTrack } = usePlayer();
+  const { user, playTrack } = usePlayer();
   const [plans, setPlans] = useState<ListeningPlan[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
 
-  const reload = () => setPlans(getStoredPlans());
+  const reload = () => setPlans(getStoredPlans(user?.id));
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [user]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +42,7 @@ export default function ListeningPlansPage() {
       description: description.trim(),
       items: [],
       status: 'ACTIVE',
-    });
+    }, user?.id);
 
     setTitle('');
     setDescription('');
@@ -51,7 +51,7 @@ export default function ListeningPlansPage() {
   };
 
   const handleToggle = (planId: string, itemId: string) => {
-    togglePlanItemCompletion(planId, itemId);
+    togglePlanItemCompletion(planId, itemId, user?.id);
     reload();
   };
 

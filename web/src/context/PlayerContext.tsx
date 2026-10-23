@@ -1,196 +1,332 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Track, PlaybackState, RepeatMode } from '@/types/music';
+import { SpotifyUser, SpotifyDevice, SpotifyPlaybackState } from '@/types/auth';
+import { 
+  getStoredUser, 
+  setStoredUser, 
+  getValidAccessToken, 
+  logoutSpotify, 
+  initiateSpotifyLogin, 
+  setCustomSpotifyClientId,
+  getSpotifyClientId
+} from '@/lib/spotifyAuth';
+import { 
+  getCurrentUserProfile, 
+  getCurrentPlayback, 
+  getAvailableDevices, 
+  spotifyPlayTrack, 
+  spotifyResumePlayback, 
+  spotifyPausePlayback, 
+  spotifyNextTrack, 
+  spotifyPreviousTrack, 
+  spotifySeekPosition, 
+  spotifySetPlayerVolume,
+  spotifyTransferPlayback
+} from '@/lib/spotifyApi';
 import { recordHistoryEntry } from '@/lib/storage';
-import { getStoredAccessToken } from '@/lib/spotifyAuth';
-
-const INITIAL_TRACK: Track = {
-  id: 'track_stk',
-  uri: 'spotify:track:1234stk',
-  title: 'Sanam Teri Kasam',
-  artist: 'Himesh Reshammiya, Ankit Tiwari, Palak Muchhal',
-  album: 'Sanam Teri Kasam (Original Soundtrack)',
-  artworkUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-  durationMs: 314000, // 5:14
-};
-
-const DEFAULT_QUEUE: Track[] = [
-  INITIAL_TRACK,
-  {
-    id: 'track_heer',
-    uri: 'spotify:track:5678heer',
-    title: 'Heer',
-    artist: 'Ali & Shjr, Haider Ali, Ali Raza',
-    album: 'Heer',
-    artworkUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
-    durationMs: 226000, // 3:46
-  },
-  {
-    id: 'track_trh',
-    uri: 'spotify:track:9012trh',
-    title: 'Tu Rehti Hai',
-    artist: 'Aditya Rikhari',
-    album: 'Tu Rehti Hai',
-    artworkUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop&q=80',
-    durationMs: 166000, // 2:46
-  },
-  {
-    id: 'track_fh',
-    uri: 'spotify:track:3456fh',
-    title: 'Finding Her',
-    artist: 'Kushagra, Bharath',
-    album: 'Finding Her',
-    artworkUrl: 'https://images.unsplash.com/photo-1487180144351-b8472da7d491?w=600&auto=format&fit=crop&q=80',
-    durationMs: 182000, // 3:02
-  },
-];
 
 interface PlayerContextType extends PlaybackState {
+  // Auth State
+  user: SpotifyUser | null;
+  isAuthenticated: boolean;
+  isAuthLoading: boolean;
+  clientIdConfigured: boolean;
+  login: (overrideClientId?: string) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => void;
+  configureClientId: (clientId: string) => void;
+
+  // Device & Live Status
+  activeDevice: SpotifyDevice | null;
+  availableDevices: SpotifyDevice[];
+  playbackError: string | null;
+  clearPlaybackError: () => void;
+  switchDevice: (deviceId: string) => Promise<boolean>;
+
+  // Player UI & Controls
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
-  playTrack: (track: Track) => void;
-  togglePlay: () => void;
-  nextTrack: () => void;
-  previousTrack: () => void;
-  seekTo: (positionMs: number) => void;
-  setVolume: (volume: number) => void;
+  playTrack: (track: Track) => Promise<void>;
+  togglePlay: () => Promise<void>;
+  nextTrack: () => Promise<void>;
+  previousTrack: () => Promise<void>;
+  seekTo: (positionMs: number) => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
   toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   addToQueue: (track: Track) => void;
+  refreshPlayback: () => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(INITIAL_TRACK);
+  // Auth state
+  const [user, setUser] = useState<SpotifyUser | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [clientIdConfigured, setClientIdConfigured] = useState<boolean>(false);
+
+  // Playback state
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [positionMs, setPositionMs] = useState<number>(15000);
-  const [durationMs, setDurationMs] = useState<number>(314000);
+  const [positionMs, setPositionMs] = useState<number>(0);
+  const [durationMs, setDurationMs] = useState<number>(0);
   const [volume, setVolumeState] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [shuffle, setShuffle] = useState<boolean>(false);
   const [repeat, setRepeat] = useState<RepeatMode>('off');
-  const [queue, setQueue] = useState<Track[]>(DEFAULT_QUEUE);
+  const [queue, setQueue] = useState<Track[]>([]);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Device state & diagnostics
+  const [activeDevice, setActiveDevice] = useState<SpotifyDevice | null>(null);
+  const [availableDevices, setAvailableDevices] = useState<SpotifyDevice[]>([]);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
-  // Playback timer ticker for seamless position progression
+  const localTickerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check Client ID configuration on mount
+  useEffect(() => {
+    const id = getSpotifyClientId();
+    setClientIdConfigured(!!id);
+  }, []);
+
+  // Restore authenticated session on mount
+  useEffect(() => {
+    async function restoreSession() {
+      setIsAuthLoading(true);
+      const cached = getStoredUser();
+      const token = await getValidAccessToken();
+
+      if (token) {
+        if (cached) {
+          setUser(cached);
+          setIsAuthenticated(true);
+        }
+        // Verify with fresh profile
+        try {
+          const fresh = await getCurrentUserProfile();
+          if (fresh) {
+            setUser(fresh);
+            setStoredUser(fresh);
+            setIsAuthenticated(true);
+          } else if (!cached) {
+            setIsAuthenticated(false);
+          }
+        } catch {
+          if (!cached) setIsAuthenticated(false);
+        }
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+      setIsAuthLoading(false);
+    }
+
+    restoreSession();
+  }, []);
+
+  // Poll Spotify playback state when authenticated
+  const refreshPlayback = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      const [playback, devices] = await Promise.all([
+        getCurrentPlayback(),
+        getAvailableDevices(),
+      ]);
+
+      setAvailableDevices(devices);
+      const active = devices.find((d) => d.is_active) || (devices.length > 0 ? devices[0] : null);
+      setActiveDevice(active);
+
+      if (playback && playback.item) {
+        const item = playback.item;
+        const track: Track = {
+          id: item.id,
+          uri: item.uri,
+          title: item.name,
+          artist: item.artists.map((a) => a.name).join(', '),
+          album: item.album.name,
+          artworkUrl: item.album.images?.[0]?.url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+          durationMs: item.duration_ms,
+        };
+
+        setCurrentTrack(track);
+        setIsPlaying(playback.is_playing);
+        setPositionMs(playback.progress_ms || 0);
+        setDurationMs(item.duration_ms);
+        if (playback.device) {
+          setVolumeState(playback.device.volume_percent / 100);
+        }
+        if (playback.shuffle_state !== undefined) {
+          setShuffle(playback.shuffle_state);
+        }
+        if (playback.repeat_state) {
+          setRepeat(playback.repeat_state);
+        }
+      }
+    } catch (e) {
+      console.warn('Playback refresh warning:', e);
+    }
+  }, [isAuthenticated]);
+
+  // Periodic polling for real-time sync with user's Spotify app
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshPlayback();
+      pollIntervalRef.current = setInterval(refreshPlayback, 3000);
+    } else {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    }
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [isAuthenticated, refreshPlayback]);
+
+  // Smooth local ticker when playing between poll ticks
   useEffect(() => {
     if (isPlaying) {
-      timerRef.current = setInterval(() => {
+      localTickerRef.current = setInterval(() => {
         setPositionMs((prev) => {
-          if (prev >= durationMs) {
-            // Track finished, advance
-            handleAutoAdvance();
-            return 0;
-          }
+          if (durationMs > 0 && prev >= durationMs) return durationMs;
           return prev + 1000;
         });
       }, 1000);
     } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (localTickerRef.current) clearInterval(localTickerRef.current);
     }
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (localTickerRef.current) clearInterval(localTickerRef.current);
     };
-  }, [isPlaying, durationMs, currentTrack]);
+  }, [isPlaying, durationMs]);
 
-  const handleAutoAdvance = () => {
-    if (repeat === 'track' && currentTrack) {
-      setPositionMs(0);
-      setIsPlaying(true);
-      return;
-    }
-    nextTrack();
+  const login = async (overrideClientId?: string) => {
+    return await initiateSpotifyLogin(overrideClientId);
   };
 
-  const playTrack = (track: Track) => {
+  const logout = () => {
+    logoutSpotify();
+    setUser(null);
+    setIsAuthenticated(false);
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    setActiveDevice(null);
+    setAvailableDevices([]);
+  };
+
+  const configureClientId = (clientId: string) => {
+    setCustomSpotifyClientId(clientId);
+    setClientIdConfigured(!!clientId.trim());
+  };
+
+  const clearPlaybackError = () => {
+    setPlaybackError(null);
+  };
+
+  const switchDevice = async (deviceId: string): Promise<boolean> => {
+    const ok = await spotifyTransferPlayback(deviceId, true);
+    if (ok) {
+      await refreshPlayback();
+    }
+    return ok;
+  };
+
+  // Real Playback Controls
+  const playTrack = async (track: Track) => {
+    if (!isAuthenticated) {
+      setPlaybackError('PLEASE_LOGIN');
+      return;
+    }
+
     setCurrentTrack(track);
-    setDurationMs(track.durationMs || 240000);
+    setDurationMs(track.durationMs);
     setPositionMs(0);
     setIsPlaying(true);
+    setPlaybackError(null);
 
-    // Record observed listening history in local storage
-    recordHistoryEntry(track);
+    // Record in user's isolated history
+    recordHistoryEntry(track, user?.id);
 
-    // If Spotify access token exists, trigger Spotify Connect playback via Web API
-    const token = getStoredAccessToken();
-    if (token) {
-      fetch('https://api.spotify.com/v1/me/player/play', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          uris: [track.uri],
-        }),
-      }).catch((e) => console.warn('Spotify Connect play skipped:', e));
-    }
-  };
-
-  const togglePlay = () => {
-    setIsPlaying((prev) => !prev);
-
-    const token = getStoredAccessToken();
-    if (token) {
-      const endpoint = isPlaying ? 'pause' : 'play';
-      fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch((e) => console.warn('Spotify Connect toggle skipped:', e));
-    }
-  };
-
-  const nextTrack = () => {
-    if (!currentTrack || queue.length === 0) return;
-    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-    let nextIndex = currentIndex + 1;
-    if (nextIndex >= queue.length) {
-      if (repeat === 'context') {
-        nextIndex = 0;
-      } else {
+    // Call Spotify Web API
+    const res = await spotifyPlayTrack(track.uri, activeDevice?.id);
+    if (!res.success) {
+      if (res.error === 'NO_ACTIVE_DEVICE') {
+        setPlaybackError('NO_ACTIVE_DEVICE');
         setIsPlaying(false);
-        setPositionMs(0);
-        return;
+      } else if (res.error === 'PREMIUM_REQUIRED') {
+        setPlaybackError('PREMIUM_REQUIRED');
+        setIsPlaying(false);
+      } else {
+        setPlaybackError(res.error || 'Playback could not be started');
       }
+    } else {
+      setTimeout(refreshPlayback, 500);
     }
-    playTrack(queue[nextIndex]);
   };
 
-  const previousTrack = () => {
-    if (!currentTrack || queue.length === 0) return;
-    if (positionMs > 3000) {
-      // If played more than 3s, restart current song
-      setPositionMs(0);
+  const togglePlay = async () => {
+    if (!isAuthenticated) {
+      setPlaybackError('PLEASE_LOGIN');
       return;
     }
-    const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-    const prevIndex = currentIndex > 0 ? currentIndex - 1 : 0;
-    playTrack(queue[prevIndex]);
+
+    if (isPlaying) {
+      setIsPlaying(false);
+      await spotifyPausePlayback();
+    } else {
+      setIsPlaying(true);
+      const res = await spotifyResumePlayback(activeDevice?.id);
+      if (!res.success) {
+        if (res.error === 'NO_ACTIVE_DEVICE') {
+          setPlaybackError('NO_ACTIVE_DEVICE');
+          setIsPlaying(false);
+        } else if (res.error === 'PREMIUM_REQUIRED') {
+          setPlaybackError('PREMIUM_REQUIRED');
+          setIsPlaying(false);
+        }
+      }
+    }
+    setTimeout(refreshPlayback, 500);
   };
 
-  const seekTo = (newPositionMs: number) => {
+  const nextTrack = async () => {
+    if (!isAuthenticated) return;
+    await spotifyNextTrack();
+    setTimeout(refreshPlayback, 500);
+  };
+
+  const previousTrack = async () => {
+    if (!isAuthenticated) return;
+    if (positionMs > 3000) {
+      await seekTo(0);
+      return;
+    }
+    await spotifyPreviousTrack();
+    setTimeout(refreshPlayback, 500);
+  };
+
+  const seekTo = async (newPositionMs: number) => {
     const clamped = Math.max(0, Math.min(newPositionMs, durationMs));
     setPositionMs(clamped);
-
-    const token = getStoredAccessToken();
-    if (token) {
-      fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${Math.round(clamped)}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch((e) => console.warn('Spotify Connect seek skipped:', e));
+    if (isAuthenticated) {
+      await spotifySeekPosition(clamped);
     }
   };
 
-  const setVolume = (val: number) => {
+  const setVolume = async (val: number) => {
     setVolumeState(val);
     if (val === 0) setIsMuted(true);
     else setIsMuted(false);
+    if (isAuthenticated) {
+      await spotifySetPlayerVolume(val * 100);
+    }
   };
 
   const toggleMute = () => {
@@ -216,6 +352,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   return (
     <PlayerContext.Provider
       value={{
+        // Auth State
+        user,
+        isAuthenticated,
+        isAuthLoading,
+        clientIdConfigured,
+        login,
+        logout,
+        configureClientId,
+
+        // Device Diagnostics
+        activeDevice,
+        availableDevices,
+        playbackError,
+        clearPlaybackError,
+        switchDevice,
+
+        // Playback State
         currentTrack,
         isPlaying,
         positionMs,
@@ -237,6 +390,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         toggleShuffle,
         cycleRepeat,
         addToQueue,
+        refreshPlayback,
       }}
     >
       {children}
