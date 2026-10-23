@@ -4,6 +4,7 @@ build/
 .kotlin/
 *.apk
 !release/*.apk
+.vercel/
 *.zip
 dist/
 local.properties
