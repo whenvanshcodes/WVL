@@ -109,6 +109,50 @@ export async function getUserPlaylists(limit = 20): Promise<any[]> {
   return res?.items || [];
 }
 
+export async function getUserSavedTracks(limit = 25): Promise<Track[]> {
+  const res: any = await spotifyFetch(`/me/tracks?limit=${limit}`);
+  if (!res?.items) return [];
+
+  return res.items
+    .filter((item: any) => item?.track && item?.track?.id)
+    .map((item: any) => {
+      const track = item.track;
+      return {
+        id: track.id,
+        uri: track.uri,
+        title: track.name,
+        artist: track.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+        album: track.album?.name || 'Unknown Album',
+        artworkUrl: track.album?.images?.[0]?.url ||
+          'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+        durationMs: track.duration_ms,
+        playedAt: item.added_at,
+      };
+    });
+}
+
+export async function getPlaylistTracks(playlistId: string, limit = 25): Promise<Track[]> {
+  const res: any = await spotifyFetch(`/playlists/${playlistId}/tracks?limit=${limit}`);
+  if (!res?.items) return [];
+
+  return res.items
+    .filter((item: any) => item?.track && item?.track?.id)
+    .map((item: any) => {
+      const track = item.track;
+      return {
+        id: track.id,
+        uri: track.uri,
+        title: track.name,
+        artist: track.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+        album: track.album?.name || 'Unknown Album',
+        artworkUrl: track.album?.images?.[0]?.url ||
+          'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+        durationMs: track.duration_ms,
+        playedAt: item.added_at,
+      };
+    });
+}
+
 export async function searchSpotifyCatalog(query: string, types = 'track,artist,album', limit = 15): Promise<{
   tracks: Track[];
   artists: any[];

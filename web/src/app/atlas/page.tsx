@@ -26,7 +26,8 @@ import {
 import { 
   getUserTopArtists, 
   getUserTopTracks, 
-  getRecentlyPlayedTracks 
+  getRecentlyPlayedTracks,
+  getUserSavedTracks
 } from '@/lib/spotifyApi';
 import { 
   ListeningHistoryEntry, 
@@ -57,14 +58,16 @@ export default function SoundAtlasPage() {
 
     if (isAuthenticated) {
       try {
-        const [recent, topArtists, topTracks] = await Promise.all([
-          getRecentlyPlayedTracks(25),
-          getUserTopArtists(8),
-          getUserTopTracks(15),
+        const [recent, topArtists, topTracks, saved] = await Promise.all([
+          getRecentlyPlayedTracks(25).catch(() => []),
+          getUserTopArtists(12).catch(() => []),
+          getUserTopTracks(20).catch(() => []),
+          getUserSavedTracks(20).catch(() => []),
         ]);
 
-        if (recent.length > 0) {
-          hist = syncSpotifyRecentHistory(recent, userId);
+        const allTracks = [...recent, ...topTracks, ...saved];
+        if (allTracks.length > 0) {
+          hist = syncSpotifyRecentHistory(allTracks, userId);
         }
 
         setHistory(hist);

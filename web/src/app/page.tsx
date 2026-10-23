@@ -17,7 +17,9 @@ import {
   Smartphone,
   AlertCircle,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  Music2,
+  Heart
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { 
@@ -28,8 +30,13 @@ import {
   getStoredInbox,
   syncSpotifyRecentHistory 
 } from '@/lib/storage';
-import { getRecentlyPlayedTracks } from '@/lib/spotifyApi';
-import { ListeningHistoryEntry, HistoryAlbum, HistoryArtist } from '@/types/music';
+import { 
+  getRecentlyPlayedTracks, 
+  getUserTopTracks, 
+  getUserSavedTracks, 
+  getUserPlaylists 
+} from '@/lib/spotifyApi';
+import { ListeningHistoryEntry, HistoryAlbum, HistoryArtist, Track } from '@/types/music';
 import { BrandMark } from '@/components/BrandMark';
 
 export default function HomePage() {
@@ -53,9 +60,12 @@ export default function HomePage() {
   const [history, setHistory] = useState<ListeningHistoryEntry[]>([]);
   const [albums, setAlbums] = useState<HistoryAlbum[]>([]);
   const [artists, setArtists] = useState<HistoryArtist[]>([]);
+  const [topTracks, setTopTracks] = useState<Track[]>([]);
+  const [savedTracks, setSavedTracks] = useState<Track[]>([]);
+  const [userPlaylists, setUserPlaylists] = useState<any[]>([]);
   const [plansCount, setPlansCount] = useState(0);
   const [inboxCount, setInboxCount] = useState(0);
-  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+  const [isLoadingMusic, setIsLoadingMusic] = useState(false);
 
   // Load history, plans, inbox scoped to current user
   useEffect(() => {
@@ -67,20 +77,30 @@ export default function HomePage() {
     setPlansCount(getStoredPlans(userId).length);
     setInboxCount(getStoredInbox(userId).length);
 
-    // If authenticated, fetch user's live recently played tracks from Spotify Web API
+    // If authenticated, fetch user's live Spotify tracks, top tracks, saved songs, and playlists
     if (isAuthenticated) {
-      setIsLoadingRecent(true);
-      getRecentlyPlayedTracks(20)
-        .then((tracks) => {
-          if (tracks.length > 0) {
-            const synced = syncSpotifyRecentHistory(tracks, userId);
+      setIsLoadingMusic(true);
+      Promise.all([
+        getRecentlyPlayedTracks(20).catch(() => []),
+        getUserTopTracks(20).catch(() => []),
+        getUserSavedTracks(20).catch(() => []),
+        getUserPlaylists(8).catch(() => []),
+      ])
+        .then(([recent, top, saved, playlists]) => {
+          setTopTracks(top);
+          setSavedTracks(saved);
+          setUserPlaylists(playlists);
+
+          const combined = [...recent, ...top, ...saved];
+          if (combined.length > 0) {
+            const synced = syncSpotifyRecentHistory(combined, userId);
             setHistory(synced);
             setAlbums(getExploredAlbums(synced));
             setArtists(getExploredArtists(synced));
           }
         })
-        .catch((e) => console.warn('Failed to load recent tracks:', e))
-        .finally(() => setIsLoadingRecent(false));
+        .catch((e) => console.warn('Failed to load Spotify tracks:', e))
+        .finally(() => setIsLoadingMusic(false));
     }
   }, [user, isAuthenticated]);
 
@@ -317,6 +337,129 @@ export default function HomePage() {
             >
               {isPlaying ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 fill-white ml-0.5" />}
             </button>
+          </div>
+        </section>
+      )}
+
+      {/* Loading state when fetching Spotify music */}
+      {isAuthenticated && isLoadingMusic && history.length === 0 && (
+        <div className="p-8 rounded-3xl bg-surface-card border border-primary/20 text-center space-y-3">
+          <RefreshCw className="w-6 h-6 text-primary-light animate-spin mx-auto" />
+          <span className="text-sm font-bold text-white block">Loading your Spotify songs...</span>
+          <p className="text-xs text-text-muted">Fetching your top tracks, liked songs, and playlists.</p>
+        </div>
+      )}
+
+      {/* Your Spotify Songs (Top & Liked Tracks) */}
+      {isAuthenticated && (topTracks.length > 0 || savedTracks.length > 0) && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary-light" />
+              <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">
+                Your Spotify Songs
+              </h2>
+            </div>
+            <Link href="/search" className="text-xs text-primary-light hover:underline font-mono">
+              Search All ({topTracks.length + savedTracks.length})
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {[...topTracks, ...savedTracks]
+              .filter((track, index, self) => index === self.findIndex((t) => t.id === track.id))
+              .slice(0, 9)
+              .map((track) => (
+                <div
+                  key={track.id + track.uri}
+                  onClick={() => playTrack(track)}
+                  className="group flex items-center gap-3 p-3 rounded-2xl bg-surface-card border border-surface-border hover:border-primary/50 hover:bg-surface-hover transition-all cursor-pointer shadow-sm"
+                >
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0">
+                    <Image
+                      src={track.artworkUrl}
+                      alt={track.title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform"
+                      sizes="48px"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-white truncate block group-hover:text-primary-light transition-colors">
+                      {track.title}
+                    </span>
+                    <span className="text-xs text-text-muted truncate block">
+                      {track.artist}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playTrack(track);
+                    }}
+                    className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 text-primary-light flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all shrink-0"
+                    aria-label={`Play ${track.title}`}
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                  </button>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {/* Your Spotify Playlists */}
+      {isAuthenticated && userPlaylists.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListMusic className="w-5 h-5 text-primary-light" />
+              <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">
+                Your Playlists
+              </h2>
+            </div>
+            <Link href="/search" className="text-xs text-primary-light hover:underline font-mono">
+              View All ({userPlaylists.length})
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {userPlaylists.slice(0, 4).map((pl) => (
+              <Link
+                key={pl.id}
+                href="/search"
+                className="group p-3 rounded-2xl bg-surface-card border border-surface-border hover:border-primary/40 transition-all flex flex-col space-y-2"
+              >
+                <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-surface-base">
+                  {pl.images?.[0]?.url ? (
+                    <Image
+                      src={pl.images[0].url}
+                      alt={pl.name}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform"
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-text-muted">
+                      <Music2 className="w-8 h-8" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <span className="text-sm font-bold text-white truncate block group-hover:text-primary-light transition-colors">
+                    {pl.name}
+                  </span>
+                  <span className="text-xs text-text-muted truncate block">
+                    {pl.tracks?.total || 0} tracks
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       )}
