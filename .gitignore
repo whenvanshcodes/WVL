@@ -3,6 +3,7 @@ build/
 .gradle/
 .kotlin/
 *.apk
+!release/*.apk
 *.zip
 dist/
 local.properties
