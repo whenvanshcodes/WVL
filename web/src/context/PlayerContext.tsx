@@ -36,6 +36,7 @@ interface PlayerContextType extends PlaybackState {
   clearAuthError: () => void;
   login: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
+  refreshAuthSession: () => Promise<void>;
 
   // Device & Live Status
   activeDevice: SpotifyDevice | null;
@@ -90,40 +91,58 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const localTickerRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Restore authenticated session on mount
-  useEffect(() => {
-    async function restoreSession() {
-      setIsAuthLoading(true);
-      const cached = getStoredUser();
-      const token = await getValidAccessToken();
+  // Restore authenticated session on mount and sync across windows/tabs
+  const restoreSession = useCallback(async () => {
+    setIsAuthLoading(true);
+    const token = await getValidAccessToken();
+    const cached = getStoredUser();
 
-      if (token) {
-        if (cached) {
-          setUser(cached);
-          setIsAuthenticated(true);
-        }
-        // Verify with fresh profile
-        try {
-          const fresh = await getCurrentUserProfile();
-          if (fresh) {
-            setUser(fresh);
-            setStoredUser(fresh);
-            setIsAuthenticated(true);
-          } else if (!cached) {
-            setIsAuthenticated(false);
-          }
-        } catch {
-          if (!cached) setIsAuthenticated(false);
-        }
+    if (token) {
+      setIsAuthenticated(true);
+      if (cached) {
+        setUser(cached);
       } else {
-        setUser(null);
-        setIsAuthenticated(false);
+        setUser({
+          id: 'spotify-user',
+          displayName: 'Spotify User',
+          images: [],
+        });
       }
-      setIsAuthLoading(false);
-    }
 
-    restoreSession();
+      // Verify and update with fresh profile in background
+      try {
+        const fresh = await getCurrentUserProfile();
+        if (fresh) {
+          setUser(fresh);
+          setStoredUser(fresh);
+        }
+      } catch (err) {
+        console.warn('Could not refresh Spotify user profile:', err);
+      }
+    } else {
+      setUser(null);
+      setIsAuthenticated(false);
+    }
+    setIsAuthLoading(false);
   }, []);
+
+  useEffect(() => {
+    restoreSession();
+
+    const handleAuthEvent = () => {
+      restoreSession();
+    };
+
+    window.addEventListener('storage', handleAuthEvent);
+    window.addEventListener('wvl:auth-changed', handleAuthEvent);
+    window.addEventListener('focus', handleAuthEvent);
+
+    return () => {
+      window.removeEventListener('storage', handleAuthEvent);
+      window.removeEventListener('wvl:auth-changed', handleAuthEvent);
+      window.removeEventListener('focus', handleAuthEvent);
+    };
+  }, [restoreSession]);
 
   // Poll Spotify playback state when authenticated
   const refreshPlayback = useCallback(async () => {
@@ -419,6 +438,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         cycleRepeat,
         addToQueue,
         refreshPlayback,
+        refreshAuthSession: restoreSession,
       }}
     >
       {children}

@@ -39,9 +39,12 @@ function CallbackContent() {
       setIsProcessing(false);
       if (result.success) {
         setSuccess(true);
+        try {
+          window.dispatchEvent(new Event('wvl:auth-changed'));
+        } catch {}
         setTimeout(() => {
-          router.push('/');
-        }, 800);
+          window.location.href = '/';
+        }, 500);
       } else {
         setError(result.error || 'Failed to exchange authorization token. Please try again.');
       }
