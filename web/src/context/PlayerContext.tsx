@@ -24,6 +24,7 @@ import {
   spotifyTransferPlayback
 } from '@/lib/spotifyApi';
 import { recordHistoryEntry } from '@/lib/storage';
+import { spotifyPlayerEngine } from '@/lib/spotifyPlayerEngine';
 
 interface PlayerContextType extends PlaybackState {
   // Auth State
@@ -183,6 +184,43 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, refreshPlayback]);
 
+  // Initialize and subscribe to spotifyPlayerEngine (matching player-bridge lifecycle)
+  useEffect(() => {
+    if (isAuthenticated) {
+      spotifyPlayerEngine.initWebSdk();
+      const unsubscribe = spotifyPlayerEngine.subscribe((msg) => {
+        if (msg.type === 'ready' && msg.deviceId) {
+          const webDevice: SpotifyDevice = {
+            id: msg.deviceId,
+            name: 'WhenVanshListens Web Player',
+            type: 'Computer',
+            is_active: true,
+            is_private_session: false,
+            is_restricted: false,
+            volume_percent: 80,
+          };
+          setActiveDevice((prev) => prev || webDevice);
+          setAvailableDevices((prev) => {
+            const exists = prev.some((d) => d.id === msg.deviceId);
+            return exists ? prev : [webDevice, ...prev];
+          });
+        } else if (msg.type === 'state' && msg.state) {
+          if (msg.state.track) setCurrentTrack(msg.state.track);
+          setIsPlaying(!msg.state.isPaused);
+          setPositionMs(msg.state.positionMs);
+          setDurationMs(msg.state.durationMs);
+          setVolumeState(msg.state.volume);
+          setShuffle(msg.state.shuffle);
+          setRepeat(msg.state.repeat);
+        }
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [isAuthenticated]);
+
   // Smooth local ticker when playing between poll ticks
   useEffect(() => {
     if (isPlaying) {
@@ -245,7 +283,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return ok;
   };
 
-  // Real Playback Controls
+  // Real Playback Controls routed through spotifyPlayerEngine
   const playTrack = async (track: Track) => {
     if (!isAuthenticated) {
       setPlaybackError('PLEASE_LOGIN');
@@ -261,21 +299,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Record in user's isolated history
     recordHistoryEntry(track, user?.id);
 
-    // Call Spotify Web API
-    const res = await spotifyPlayTrack(track.uri, activeDevice?.id);
-    if (!res.success) {
-      if (res.error === 'NO_ACTIVE_DEVICE') {
-        setPlaybackError('NO_ACTIVE_DEVICE');
-        setIsPlaying(false);
-      } else if (res.error === 'PREMIUM_REQUIRED') {
-        setPlaybackError('PREMIUM_REQUIRED');
-        setIsPlaying(false);
-      } else {
-        setPlaybackError(res.error || 'Playback could not be started');
-      }
-    } else {
-      setTimeout(refreshPlayback, 500);
-    }
+    // Dispatch play command through engine
+    await spotifyPlayerEngine.call('player.play', {
+      trackUri: track.uri,
+      deviceId: activeDevice?.id,
+    });
+    setTimeout(refreshPlayback, 500);
   };
 
   const togglePlay = async () => {
@@ -286,26 +315,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
     if (isPlaying) {
       setIsPlaying(false);
-      await spotifyPausePlayback();
+      await spotifyPlayerEngine.call('player.pause');
     } else {
       setIsPlaying(true);
-      const res = await spotifyResumePlayback(activeDevice?.id);
-      if (!res.success) {
-        if (res.error === 'NO_ACTIVE_DEVICE') {
-          setPlaybackError('NO_ACTIVE_DEVICE');
-          setIsPlaying(false);
-        } else if (res.error === 'PREMIUM_REQUIRED') {
-          setPlaybackError('PREMIUM_REQUIRED');
-          setIsPlaying(false);
-        }
-      }
+      await spotifyPlayerEngine.call('player.resume');
     }
     setTimeout(refreshPlayback, 500);
   };
 
   const nextTrack = async () => {
     if (!isAuthenticated) return;
-    await spotifyNextTrack();
+    await spotifyPlayerEngine.call('player.next');
     setTimeout(refreshPlayback, 500);
   };
 
@@ -315,7 +335,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       await seekTo(0);
       return;
     }
-    await spotifyPreviousTrack();
+    await spotifyPlayerEngine.call('player.previous');
     setTimeout(refreshPlayback, 500);
   };
 
@@ -323,7 +343,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const clamped = Math.max(0, Math.min(newPositionMs, durationMs));
     setPositionMs(clamped);
     if (isAuthenticated) {
-      await spotifySeekPosition(clamped);
+      await spotifyPlayerEngine.call('player.seek', { positionMs: clamped });
     }
   };
 
@@ -332,7 +352,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (val === 0) setIsMuted(true);
     else setIsMuted(false);
     if (isAuthenticated) {
-      await spotifySetPlayerVolume(val * 100);
+      await spotifyPlayerEngine.call('volume.set', { level: val });
     }
   };
 

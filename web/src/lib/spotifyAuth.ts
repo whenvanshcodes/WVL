@@ -8,6 +8,7 @@ const STATE_KEY = 'wvl_spotify_oauth_state';
 const USER_KEY = 'wvl_spotify_user_profile';
 
 export const SPOTIFY_SCOPES = [
+  'streaming',
   'user-read-private',
   'user-read-email',
   'user-read-playback-state',
