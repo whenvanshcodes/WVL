@@ -158,6 +158,29 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Personal & Ad-Free Experience Notice */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-mono font-bold tracking-wider text-text-muted uppercase">
+          Personal & Ad-Free Experience
+        </h2>
+
+        <div className="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3 text-xs text-text-secondary leading-relaxed">
+          <div className="flex items-center gap-2 text-white font-bold">
+            <ShieldCheck className="w-4 h-4 text-primary-light" />
+            <span>Zero Advertising • Zero Monetization • Pure Music</span>
+          </div>
+          <p>
+            WhenVanshListens is an entirely personal, non-commercial music space. There are no advertisements, 
+            sponsored banners, promotional placements, affiliate tracking, or paid subscription tiers.
+          </p>
+          <p className="text-text-muted">
+            Each user connects their own personal Spotify account through official Spotify PKCE OAuth. 
+            WhenVanshListens operates strictly via official public APIs and does not interfere with Spotify&apos;s own playback engine, 
+            subscription rules, or platform advertising.
+          </p>
+        </div>
+      </section>
+
       {/* Privacy & Storage Architecture Notice */}
       <section className="space-y-3">
         <h2 className="text-xs font-mono font-bold tracking-wider text-text-muted uppercase">
@@ -166,7 +189,7 @@ export default function SettingsPage() {
 
         <div className="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3 text-xs text-text-secondary leading-relaxed">
           <div className="flex items-center gap-2 text-white font-bold">
-            <ShieldCheck className="w-4 h-4 text-primary-light" />
+            <Database className="w-4 h-4 text-primary-light" />
             <span>Private & Browser-Isolated</span>
           </div>
           <p>
