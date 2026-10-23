@@ -120,22 +120,46 @@ Blocking ads goes against Spotify's Terms of Use, and Spotify may suspend accoun
 
 Not affiliated with or endorsed by Spotify. Spotify is a trademark of Spotify AB.
 
+## WhenVanshListens Web (Desktop & iOS Safari)
+
+A dedicated, responsive web client deployed to Vercel:
+- **Live Production URL**: [https://web-fawn-five-77.vercel.app](https://web-fawn-five-77.vercel.app)
+- **Features**: AMOLED Pure Black (`#000000`), Electric Blue (`#3B82F6`), Sound Atlas 3.0 (Chronological History & Constellation Map), Music Inbox, Listening Plans, Search, and Spotify PKCE OAuth with dual Web Audio playback.
+- **Documentation**: Detailed architecture, testing, and deployment report in [docs/WEB_IMPLEMENTATION_REPORT.md](docs/WEB_IMPLEMENTATION_REPORT.md).
+
+### Running the Web Client Locally
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Building for Production & Deploying to Vercel
+
+```bash
+cd web
+npm run build
+npx vercel --prod
+```
+
+---
+
 ## Support
 
-Myspoti is free, has no ads and is made in my spare time. If you enjoy it, you can support it on [Ko-fi](https://ko-fi.com/kotazo) or [GitHub Sponsors](https://github.com/sponsors/kota-zo), also from **About** in the app. Nothing is locked behind a donation.
+WhenVanshListens is personal, free, and ad-free. Follow [@whenvanshwrites](https://www.instagram.com/whenvanshwrites/) on Instagram for updates.
 
 News, help and ideas: the [Discord server](https://discord.gg/jXKnGVFnGS). Bugs and requests: [GitHub issues](https://github.com/kota-zo/myspoti/issues).
 
 ## For developers
 
-The Android project is in `base/`, split in two:
+The project contains two independently deployable modules:
+1. **Android Application (`base/`)**: Jetpack Compose, Kotlin models (`:api`), headless Spotify bridge (`:api-spotify`), and Android WebView host (`:host-android`).
+2. **Web Application (`web/`)**: Next.js 14 App Router, TypeScript, Tailwind CSS, Spotify PKCE OAuth, and Web Audio API engine.
 
-- **`:api`** is the contract the UI talks to: plain Kotlin models and interfaces (player, search, catalog, library, playlists, home, podcasts, users, lyrics, devices, Jam).
-- **`:api-spotify`** implements it on Spotify's Web Player. Playback stays in the official player, in a hidden WebView (`:host-android`), driven by a small bridge script. Catalog, search and library calls go straight to Spotify's servers. When Spotify ships a new Web Player, the app reads its new operation list by itself.
-- **`:host-cdp`** runs the same API on desktop Chrome, so the whole API is tested against the real Web Player without a phone.
-
-More: [`base/api-spotify/README.md`](base/api-spotify/README.md) and [`docs/api`](docs/api).
-
+### Android Build
 Requirements: JDK 17+ and the Android SDK (compileSdk 37).
 
 ```bash

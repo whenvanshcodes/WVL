@@ -1,7 +1,7 @@
 {
-  "name": "WhenVanshListens | Web Player",
+  "name": "WhenVanshListens",
   "short_name": "WhenVanshListens",
-  "description": "Your music, your journey. Distinctive, personal listening space with Sound Atlas.",
+  "description": "Your music, your journey. Distinctive personal listening space with Sound Atlas.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
