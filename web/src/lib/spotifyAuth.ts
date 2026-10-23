@@ -20,12 +20,14 @@ export const SPOTIFY_SCOPES = [
   'user-library-read',
 ].join(' ');
 
+const DEFAULT_CLIENT_ID = '0a993a1b24c743edb0383b7018e46cb3';
+
 export function getSpotifyClientId(): string | null {
   const envId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
   if (envId && envId.trim() && envId !== 'your_spotify_client_id_here') {
     return envId.trim();
   }
-  return null;
+  return DEFAULT_CLIENT_ID;
 }
 
 export function isSpotifyConfigured(): boolean {
