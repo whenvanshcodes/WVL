@@ -2,15 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { Track, PlaybackState, RepeatMode } from '@/types/music';
-import { SpotifyUser, SpotifyDevice, SpotifyPlaybackState } from '@/types/auth';
+import { SpotifyUser, SpotifyDevice } from '@/types/auth';
 import { 
   getStoredUser, 
   setStoredUser, 
   getValidAccessToken, 
   logoutSpotify, 
-  initiateSpotifyLogin, 
-  setCustomSpotifyClientId,
-  getSpotifyClientId
+  initiateSpotifyLogin
 } from '@/lib/spotifyAuth';
 import { 
   getCurrentUserProfile, 
@@ -32,10 +30,11 @@ interface PlayerContextType extends PlaybackState {
   user: SpotifyUser | null;
   isAuthenticated: boolean;
   isAuthLoading: boolean;
-  clientIdConfigured: boolean;
-  login: (overrideClientId?: string) => Promise<{ ok: boolean; error?: string }>;
+  isLoginInProgress: boolean;
+  authError: string | null;
+  clearAuthError: () => void;
+  login: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
-  configureClientId: (clientId: string) => void;
 
   // Device & Live Status
   activeDevice: SpotifyDevice | null;
@@ -66,8 +65,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Auth state
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
-  const [clientIdConfigured, setClientIdConfigured] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
+  const [isLoginInProgress, setIsLoginInProgress] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Playback state
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -88,12 +88,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const localTickerRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Check Client ID configuration on mount
-  useEffect(() => {
-    const id = getSpotifyClientId();
-    setClientIdConfigured(!!id);
-  }, []);
 
   // Restore authenticated session on mount
   useEffect(() => {
@@ -207,8 +201,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isPlaying, durationMs]);
 
-  const login = async (overrideClientId?: string) => {
-    return await initiateSpotifyLogin(overrideClientId);
+  const login = async () => {
+    if (isLoginInProgress) return { ok: false };
+    setIsLoginInProgress(true);
+    setAuthError(null);
+
+    const res = await initiateSpotifyLogin();
+    if (!res.ok) {
+      setIsLoginInProgress(false);
+      if (res.error === 'CONFIG_UNAVAILABLE') {
+        setAuthError('Spotify login is temporarily unavailable. Please try again in a few moments.');
+      } else {
+        setAuthError(res.error || 'Failed to start Spotify authorization.');
+      }
+      return res;
+    }
+    return res;
   };
 
   const logout = () => {
@@ -221,9 +229,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setAvailableDevices([]);
   };
 
-  const configureClientId = (clientId: string) => {
-    setCustomSpotifyClientId(clientId);
-    setClientIdConfigured(!!clientId.trim());
+  const clearAuthError = () => {
+    setAuthError(null);
   };
 
   const clearPlaybackError = () => {
@@ -356,10 +363,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated,
         isAuthLoading,
-        clientIdConfigured,
+        isLoginInProgress,
+        authError,
+        clearAuthError,
         login,
         logout,
-        configureClientId,
 
         // Device Diagnostics
         activeDevice,

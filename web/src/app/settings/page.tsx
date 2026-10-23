@@ -1,70 +1,35 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { 
   Settings, 
-  ShieldCheck, 
   Radio, 
-  Info, 
-  CheckCircle2, 
   LogOut, 
-  ExternalLink,
-  Heart,
-  KeyRound,
-  Copy,
-  Check,
   Smartphone,
-  User,
-  Database
+  Database,
+  ShieldCheck,
+  Music2,
+  Heart
 } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 import { usePlayer } from '@/context/PlayerContext';
-import { getSpotifyClientId, getRedirectUri } from '@/lib/spotifyAuth';
-import { ClientIdModal } from '@/components/ClientIdModal';
 
 export default function SettingsPage() {
   const { 
     user, 
     isAuthenticated, 
+    isLoginInProgress,
+    authError,
+    clearAuthError,
     login, 
     logout, 
     activeDevice, 
-    availableDevices, 
-    clientIdConfigured, 
-    configureClientId 
+    availableDevices 
   } = usePlayer();
-
-  const [showConfigModal, setShowConfigModal] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const redirectUri = typeof window !== 'undefined' ? getRedirectUri() : 'https://web-fawn-five-77.vercel.app/callback';
-  const currentClientId = typeof window !== 'undefined' ? getSpotifyClientId() : null;
-
-  const handleCopyUri = () => {
-    navigator.clipboard.writeText(redirectUri);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleLoginClick = async () => {
-    const res = await login();
-    if (!res.ok && res.error === 'CLIENT_ID_MISSING') {
-      setShowConfigModal(true);
-    }
-  };
 
   return (
     <main className="flex-1 w-full max-w-4xl mx-auto px-5 py-6 md:py-8 space-y-8 animate-in fade-in duration-300">
-      <ClientIdModal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
-        onSave={(id) => {
-          configureClientId(id);
-          setShowConfigModal(false);
-          login(id);
-        }}
-      />
-
       {/* Header */}
       <header className="pb-4 border-b border-surface-border">
         <div className="flex items-center gap-2">
@@ -72,7 +37,7 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Settings & About</h1>
         </div>
         <p className="text-xs text-text-muted mt-0.5">
-          Connection status, Spotify PKCE authentication, and project attribution
+          Account preferences, connected devices, and project information
         </p>
       </header>
 
@@ -82,7 +47,7 @@ export default function SettingsPage() {
           <BrandMark className="w-12 h-12" />
           <div className="flex flex-col">
             <span className="text-lg font-bold text-white tracking-tight">WhenVanshListens Web</span>
-            <span className="text-xs text-primary-light font-mono font-medium">Version 1.1.0 (PKCE Edition)</span>
+            <span className="text-xs text-primary-light font-mono font-medium">Version 1.2.0 (Consumer Release)</span>
             <span className="text-xs text-text-muted mt-0.5">Desktop & iOS Safari Compatible</span>
           </div>
         </div>
@@ -94,10 +59,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Connection & Auth Status */}
+      {/* Account & Connection Status */}
       <section className="space-y-3">
         <h2 className="text-xs font-mono font-bold tracking-wider text-text-muted uppercase">
-          Spotify Connection & Profile
+          Spotify Account & Session
         </h2>
 
         <div className="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-5">
@@ -126,7 +91,7 @@ export default function SettingsPage() {
                 <span className="text-xs text-text-muted">
                   {isAuthenticated && user
                     ? `${user.product === 'premium' ? 'Spotify Premium' : 'Spotify Free'} • ${user.email || 'Authorized'}`
-                    : 'Sign in to authorize WhenVanshListens with your personal Spotify account.'}
+                    : 'Connect your personal Spotify account to sync your playlists and listening history.'}
                 </span>
               </div>
             </div>
@@ -143,25 +108,26 @@ export default function SettingsPage() {
               </div>
             ) : (
               <button
-                onClick={handleLoginClick}
-                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-light transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:scale-105"
+                onClick={() => login()}
+                disabled={isLoginInProgress}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-light transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:scale-105 disabled:opacity-60"
               >
                 <Radio className="w-4 h-4" />
-                Connect Spotify
+                <span>{isLoginInProgress ? 'Connecting...' : 'Continue with Spotify'}</span>
               </button>
             )}
           </div>
 
-          {/* Active Devices if connected */}
+          {/* Connected Spotify Devices */}
           {isAuthenticated && (
             <div className="pt-4 border-t border-surface-border space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-white">
                 <span className="flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-primary-light" />
-                  Active Spotify Devices
+                  Connected Spotify Devices
                 </span>
                 <span className="text-text-muted font-mono text-[11px]">
-                  {availableDevices.length} available
+                  {availableDevices.length} online
                 </span>
               </div>
 
@@ -184,7 +150,7 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="p-3 rounded-xl bg-surface-base border border-surface-border text-xs text-text-muted">
-                  No active devices found. Open the Spotify app on your phone or computer to enable remote control.
+                  No active devices found. Open the Spotify app on your phone, tablet, or desktop to enable remote controls.
                 </div>
               )}
             </div>
@@ -192,66 +158,24 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Spotify Developer App Configuration (Client ID) */}
+      {/* Privacy & Storage Architecture Notice */}
       <section className="space-y-3">
         <h2 className="text-xs font-mono font-bold tracking-wider text-text-muted uppercase">
-          OAuth & Developer App Configuration
-        </h2>
-
-        <div className="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <span className="text-sm font-bold text-white block">Spotify Client ID</span>
-              <span className="text-xs text-text-muted font-mono">
-                {currentClientId ? `${currentClientId.substring(0, 8)}••••••••••••••••` : 'Not configured'}
-              </span>
-            </div>
-
-            <button
-              onClick={() => setShowConfigModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-base hover:bg-surface-hover border border-surface-border text-xs font-semibold text-white transition-colors self-start sm:self-auto"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-primary-light" />
-              <span>{currentClientId ? 'Change Client ID' : 'Configure Client ID'}</span>
-            </button>
-          </div>
-
-          <div className="pt-3 border-t border-surface-border space-y-2">
-            <span className="text-xs text-text-secondary block">
-              Registered Callback URI for Spotify Developer Dashboard:
-            </span>
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-surface-base border border-surface-border font-mono text-xs text-primary-light">
-              <span className="truncate">{redirectUri}</span>
-              <button
-                onClick={handleCopyUri}
-                className="flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/20 hover:bg-primary/30 text-white shrink-0 transition-colors text-[11px]"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Local Storage & Device Isolation Notice */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-mono font-bold tracking-wider text-text-muted uppercase">
-          Privacy & Storage Architecture
+          Privacy & Storage
         </h2>
 
         <div className="p-5 rounded-2xl bg-surface-card border border-surface-border space-y-3 text-xs text-text-secondary leading-relaxed">
           <div className="flex items-center gap-2 text-white font-bold">
-            <Database className="w-4 h-4 text-primary-light" />
-            <span>Browser-Isolated Local Storage</span>
+            <ShieldCheck className="w-4 h-4 text-primary-light" />
+            <span>Private & Browser-Isolated</span>
           </div>
           <p>
-            Your Music Inbox recommendations, Listening Plans, and Sound Atlas configurations are stored securely 
-            in this browser's local storage and isolated per user profile.
+            WhenVanshListens authenticates via official Spotify PKCE OAuth. Your passwords are never handled by 
+            or stored on our servers.
           </p>
           <p className="text-text-muted">
-            Note: In accordance with web platform sandboxing, browser local storage does not automatically synchronize 
-            with the native Android app or cross-device cloud backends. Each browser maintains its private session.
+            Your personal Music Inbox recommendations, Listening Plans, and Sound Atlas configurations are stored 
+            securely in this browser and isolated per user profile.
           </p>
         </div>
       </section>
@@ -286,7 +210,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Open Source Notice */}
+      {/* Footer */}
       <footer className="pt-4 border-t border-surface-border text-center text-xs text-text-muted">
         <p>WhenVanshListens Web • Built with Next.js 14, Tailwind CSS & Spotify Web API</p>
         <p className="mt-1">Original Myspoti Android base licensed under GPL-3.0</p>

@@ -15,7 +15,9 @@ import {
   Radio,
   Sparkles,
   Smartphone,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 import { usePlayer } from '@/context/PlayerContext';
 import { 
@@ -27,16 +29,18 @@ import {
   syncSpotifyRecentHistory 
 } from '@/lib/storage';
 import { getRecentlyPlayedTracks } from '@/lib/spotifyApi';
-import { ListeningHistoryEntry, HistoryAlbum, HistoryArtist, Track } from '@/types/music';
-import { ClientIdModal } from '@/components/ClientIdModal';
+import { ListeningHistoryEntry, HistoryAlbum, HistoryArtist } from '@/types/music';
+import { BrandMark } from '@/components/BrandMark';
 
 export default function HomePage() {
   const { 
     user, 
     isAuthenticated, 
     isAuthLoading, 
+    isLoginInProgress,
+    authError,
+    clearAuthError,
     login, 
-    configureClientId,
     currentTrack, 
     isPlaying, 
     playTrack, 
@@ -51,7 +55,6 @@ export default function HomePage() {
   const [artists, setArtists] = useState<HistoryArtist[]>([]);
   const [plansCount, setPlansCount] = useState(0);
   const [inboxCount, setInboxCount] = useState(0);
-  const [showConfigModal, setShowConfigModal] = useState(false);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
 
   // Load history, plans, inbox scoped to current user
@@ -81,160 +84,168 @@ export default function HomePage() {
     }
   }, [user, isAuthenticated]);
 
-  const handleLoginClick = async () => {
-    const res = await login();
-    if (!res.ok && res.error === 'CLIENT_ID_MISSING') {
-      setShowConfigModal(true);
-    }
-  };
-
-  const handleSaveClientId = (id: string) => {
-    configureClientId(id);
-    setShowConfigModal(false);
-    login(id);
-  };
-
   return (
     <main className="flex-1 w-full max-w-6xl mx-auto px-5 py-6 md:py-8 space-y-8 animate-in fade-in duration-300">
-      <ClientIdModal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
-        onSave={handleSaveClientId}
-      />
+      {/* 1. SIGNED-OUT WELCOME EXPERIENCE */}
+      {!isAuthenticated && (
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface-card via-black to-surface-card border border-primary/20 p-8 md:p-12 text-center shadow-[0_0_50px_rgba(59,130,246,0.1)] space-y-6">
+          {/* Waveform Logo */}
+          <div className="flex justify-center">
+            <BrandMark className="w-20 h-20 md:w-24 md:h-24" />
+          </div>
 
-      {/* Header & Identity */}
-      <header className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
+          <div className="max-w-xl mx-auto space-y-3">
             <span className="text-xs uppercase font-mono tracking-widest text-primary-light font-bold">
-              WHENVANSHLISTENS
+              WhenVanshListens
             </span>
-            <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight mt-1">
-              {isAuthenticated && user ? `Welcome back, ${user.displayName}` : 'Listening Space'}
+            <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight">
+              Your music. Your universe.
             </h1>
-            <p className="text-sm text-text-muted mt-1">
-              {isAuthenticated
-                ? 'Your personal listening headquarters. Exploring your verified music relationships.'
-                : 'An intentional, personal listening space. Connect your Spotify account to begin.'}
+            <p className="text-sm md:text-base text-text-secondary leading-relaxed">
+              A more personal way to explore everything you listen to.
             </p>
           </div>
 
-          {!isAuthenticated && !isAuthLoading && (
-            <button
-              onClick={handleLoginClick}
-              className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-primary hover:bg-primary-light text-white text-sm font-semibold transition-all shadow-[0_0_20px_rgba(59,130,246,0.35)] shrink-0 self-start sm:self-auto hover:scale-105"
-            >
-              <Radio className="w-4 h-4" />
-              <span>Continue with Spotify</span>
-            </button>
-          )}
-        </div>
-
-        {/* Playback Error Alert if active device needed */}
-        {playbackError && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-3 text-xs text-amber-300">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold text-white block">
-                  {playbackError === 'NO_ACTIVE_DEVICE'
-                    ? 'No Active Spotify Device Found'
-                    : playbackError === 'PREMIUM_REQUIRED'
-                    ? 'Spotify Premium Required for Direct Web Control'
-                    : 'Playback Status'}
-                </span>
-                <span className="text-amber-200/90 leading-relaxed">
-                  {playbackError === 'NO_ACTIVE_DEVICE'
-                    ? 'Spotify Web API requires an active device. Open Spotify on your phone, desktop, or tablet and start any song to connect.'
-                    : playbackError === 'PREMIUM_REQUIRED'
-                    ? 'Interactive Web API playback commands require a Spotify Premium subscription. Free accounts can mirror playback by starting tracks directly in their Spotify app.'
-                    : playbackError}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={clearPlaybackError}
-              className="text-text-muted hover:text-white text-xs font-mono shrink-0 underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* Signed-Out Hero Banner (Prominent "Continue with Spotify") */}
-        {!isAuthenticated && !isAuthLoading && (
-          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-surface-card via-primary/10 to-surface-card border border-primary/30 p-6 md:p-8 shadow-[0_0_40px_rgba(59,130,246,0.15)]">
-            <div className="relative z-10 max-w-2xl space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary-light text-xs font-mono font-bold uppercase tracking-wider border border-primary/30">
-                <Sparkles className="w-3.5 h-3.5" />
-                Individual Account Access
-              </div>
-
-              <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                Listen with your own Spotify account.
-              </h2>
-
-              <p className="text-sm text-text-secondary leading-relaxed">
-                WhenVanshListens connects directly to your personal Spotify library using secure PKCE OAuth. 
-                Sync your recently played tracks, explore your unique Sound Atlas constellation map, 
-                and save recommendations to your private Music Inbox.
-              </p>
-
-              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <button
-                  onClick={handleLoginClick}
-                  className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-2xl bg-primary hover:bg-primary-light text-white text-sm font-bold transition-all shadow-[0_0_25px_rgba(59,130,246,0.4)] hover:scale-105"
-                >
-                  <Radio className="w-4 h-4" />
-                  <span>Connect with Spotify</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-
-                <div className="text-[11px] text-text-muted flex items-center gap-1.5 px-3">
-                  <span>No passwords stored. Official Spotify PKCE OAuth.</span>
+          {/* Configuration / Auth Error Notice */}
+          {authError && (
+            <div className="max-w-md mx-auto p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 text-left flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-semibold text-white block">Notice</span>
+                  <p className="text-amber-200/90 leading-relaxed">{authError}</p>
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  clearAuthError();
+                  login();
+                }}
+                className="text-primary-light hover:underline text-xs font-mono shrink-0"
+              >
+                Retry
+              </button>
             </div>
+          )}
 
-            <div className="absolute right-0 bottom-0 translate-x-12 translate-y-12 opacity-10 pointer-events-none">
-              <Disc3 className="w-96 h-96 text-primary" />
-            </div>
-          </section>
-        )}
+          {/* Prominent "Continue with Spotify" Action */}
+          <div className="pt-2 flex flex-col items-center justify-center space-y-3">
+            <button
+              onClick={() => login()}
+              disabled={isLoginInProgress}
+              className="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-primary hover:bg-primary-light text-white text-base font-bold transition-all shadow-[0_0_30px_rgba(59,130,246,0.45)] hover:scale-105 active:scale-95 disabled:opacity-60"
+            >
+              {isLoginInProgress ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>Connecting to Spotify...</span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-5 h-5" />
+                  <span>Continue with Spotify</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
 
-        {/* Sound Atlas Hero Banner */}
-        <Link
-          href="/atlas"
-          className="group relative block w-full rounded-3xl bg-surface-card border border-surface-border hover:border-primary/50 p-6 overflow-hidden transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)]"
-        >
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/20 text-primary-light text-[10px] font-mono font-bold tracking-wider uppercase border border-primary/30">
-                  <Compass className="w-3.5 h-3.5" />
-                  Sound Atlas 3.0
-                </span>
-                <span className="text-xs text-text-muted">
-                  {isAuthenticated ? 'Personalized Constellation Map' : 'Interactive Map'}
-                </span>
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold text-white group-hover:text-primary-light transition-colors">
-                Explore Your Musical Journey
-              </h2>
-              <p className="text-xs md:text-sm text-text-secondary max-w-xl">
-                Visual constellation map connecting every artist, album, and track from your real listening sessions.
+            {/* Subtle Privacy Note */}
+            <p className="text-[11px] text-text-muted max-w-sm mx-auto leading-relaxed flex items-center justify-center gap-1.5 pt-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-primary-light shrink-0" />
+              <span>Connects securely via Spotify. Your account credentials are never shared with or stored by WhenVanshListens.</span>
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* 2. AUTHENTICATED PERSONAL DASHBOARD */}
+      {isAuthenticated && user && (
+        <header className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <span className="text-xs uppercase font-mono tracking-widest text-primary-light font-bold">
+                WHENVANSHLISTENS
+              </span>
+              <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight mt-1">
+                Welcome back, {user.displayName}
+              </h1>
+              <p className="text-sm text-text-muted mt-1">
+                Your personal listening space. Exploring your verified music relationships.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 text-sm font-semibold text-primary-light group-hover:translate-x-1 transition-transform shrink-0">
-              <span>Open Sound Atlas</span>
-              <ArrowRight className="w-4 h-4" />
-            </div>
+            {activeDevice && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-card border border-surface-border text-xs shrink-0 self-start sm:self-auto">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-text-muted">Playing on</span>
+                <span className="text-white font-semibold">{activeDevice.name}</span>
+              </div>
+            )}
           </div>
-        </Link>
-      </header>
 
-      {/* Feature Quick Cards (Inbox, Plans, Device Status) */}
+          {/* Playback Alert if active device needed */}
+          {playbackError && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-3 text-xs text-amber-300">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold text-white block">
+                    {playbackError === 'NO_ACTIVE_DEVICE'
+                      ? 'No Active Spotify Device Found'
+                      : playbackError === 'PREMIUM_REQUIRED'
+                      ? 'Spotify Premium Required for Remote Playback Control'
+                      : 'Playback Notice'}
+                  </span>
+                  <span className="text-amber-200/90 leading-relaxed">
+                    {playbackError === 'NO_ACTIVE_DEVICE'
+                      ? 'Open Spotify on your phone, desktop, or tablet and start any track to enable remote control.'
+                      : playbackError === 'PREMIUM_REQUIRED'
+                      ? 'Direct remote playback control requires Spotify Premium. Free accounts can stream directly in the Spotify app while tracking history in WhenVanshListens.'
+                      : playbackError}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={clearPlaybackError}
+                className="text-text-muted hover:text-white text-xs font-mono shrink-0 underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Sound Atlas Hero Banner */}
+          <Link
+            href="/atlas"
+            className="group relative block w-full rounded-3xl bg-surface-card border border-surface-border hover:border-primary/50 p-6 overflow-hidden transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+          >
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/20 text-primary-light text-[10px] font-mono font-bold tracking-wider uppercase border border-primary/30">
+                    <Compass className="w-3.5 h-3.5" />
+                    Sound Atlas 3.0
+                  </span>
+                  <span className="text-xs text-text-muted">Personalized Constellation Map</span>
+                </div>
+                <h2 className="text-xl md:text-2xl font-bold text-white group-hover:text-primary-light transition-colors">
+                  Explore Your Musical Universe
+                </h2>
+                <p className="text-xs md:text-sm text-text-secondary max-w-xl">
+                  Visual relationship graph connecting your favorite artists, albums, and songs from real listening data.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary-light group-hover:translate-x-1 transition-transform shrink-0">
+                <span>Open Sound Atlas</span>
+                <ArrowRight className="w-4 h-4" />
+              </div>
+            </div>
+          </Link>
+        </header>
+      )}
+
+      {/* Feature Navigation Cards */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <Link
           href="/atlas"
@@ -265,14 +276,14 @@ export default function HomePage() {
 
         <div className="p-4 rounded-2xl bg-surface-card border border-surface-border">
           <Smartphone className={`w-5 h-5 mb-2 ${activeDevice ? 'text-emerald-400' : 'text-text-muted'}`} />
-          <span className="text-sm font-bold text-white block">Playback Device</span>
+          <span className="text-sm font-bold text-white block">Device Status</span>
           <span className="text-xs text-text-muted truncate block">
-            {activeDevice ? activeDevice.name : (isAuthenticated ? 'No device active' : 'Connect Spotify')}
+            {activeDevice ? activeDevice.name : (isAuthenticated ? 'Ready to connect' : 'Sign in to sync')}
           </span>
         </div>
       </section>
 
-      {/* Currently Playing Hero (When playback is active) */}
+      {/* Currently Playing Card (When Spotify playback is verified) */}
       {currentTrack && (
         <section className="p-5 md:p-6 rounded-3xl bg-surface-card border border-primary/30 relative overflow-hidden shadow-[0_0_25px_rgba(59,130,246,0.1)]">
           <div className="flex flex-col sm:flex-row items-center gap-5">
@@ -289,7 +300,7 @@ export default function HomePage() {
             <div className="flex-1 text-center sm:text-left space-y-2 min-w-0">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/20 text-primary-light text-[10px] font-mono font-bold tracking-wider uppercase">
                 <Disc3 className={`w-3.5 h-3.5 ${isPlaying ? 'animate-spin' : ''}`} />
-                {isPlaying ? 'Currently Playing' : 'Paused'}
+                {isPlaying ? 'Now Playing' : 'Paused'}
               </div>
               <h2 className="text-xl md:text-2xl font-extrabold text-white truncate">
                 {currentTrack.title}
@@ -310,7 +321,7 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* Real Recently Listened Tracks */}
+      {/* Real Recently Played Tracks */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -370,7 +381,7 @@ export default function HomePage() {
             <span className="text-sm font-bold text-white block">No recent tracks yet</span>
             <p className="text-xs text-text-muted max-w-sm mx-auto">
               {isAuthenticated
-                ? 'Play any track on Spotify or explore music here to populate your real listening history.'
+                ? 'Play any track on Spotify or explore music here to populate your personal history.'
                 : 'Connect your Spotify account to sync your recently played tracks.'}
             </p>
           </div>

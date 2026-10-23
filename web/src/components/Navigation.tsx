@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -13,12 +13,10 @@ import {
   Settings,
   Radio,
   LogOut,
-  User,
-  ExternalLink
+  Sparkles
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { usePlayer } from '@/context/PlayerContext';
-import { ClientIdModal } from './ClientIdModal';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: Home },
@@ -34,35 +32,14 @@ export function Navigation() {
   const { 
     user, 
     isAuthenticated, 
+    isLoginInProgress,
     login, 
     logout, 
-    clientIdConfigured, 
-    configureClientId,
     activeDevice 
   } = usePlayer();
-  const [showConfigModal, setShowConfigModal] = useState(false);
-
-  const handleLoginClick = async () => {
-    const res = await login();
-    if (!res.ok && res.error === 'CLIENT_ID_MISSING') {
-      setShowConfigModal(true);
-    }
-  };
-
-  const handleSaveClientId = (id: string) => {
-    configureClientId(id);
-    setShowConfigModal(false);
-    login(id);
-  };
 
   return (
     <>
-      <ClientIdModal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
-        onSave={handleSaveClientId}
-      />
-
       {/* Desktop Sidebar (hidden on mobile) */}
       <aside className="hidden md:flex flex-col w-64 h-screen bg-black border-r border-surface-border p-5 select-none shrink-0">
         {/* Brand header */}
@@ -152,16 +129,17 @@ export function Navigation() {
             <div className="space-y-2.5 text-center">
               <div className="flex items-center justify-center gap-2 text-primary-light">
                 <Radio className="w-4 h-4" />
-                <span className="text-xs font-bold text-white">Connect Account</span>
+                <span className="text-xs font-bold text-white">Your Music Space</span>
               </div>
               <p className="text-[11px] text-text-muted leading-relaxed">
-                Sign in with Spotify to access your library, recent tracks, and remote playback.
+                Connect your personal Spotify account to sync your playlists and listening history.
               </p>
               <button
-                onClick={handleLoginClick}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-light transition-all shadow-[0_0_15px_rgba(59,130,246,0.25)]"
+                onClick={() => login()}
+                disabled={isLoginInProgress}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-light transition-all shadow-[0_0_15px_rgba(59,130,246,0.25)] disabled:opacity-60"
               >
-                <span>Continue with Spotify</span>
+                <span>{isLoginInProgress ? 'Connecting...' : 'Continue with Spotify'}</span>
               </button>
             </div>
           )}
@@ -199,10 +177,11 @@ export function Navigation() {
             </div>
           ) : (
             <button
-              onClick={handleLoginClick}
-              className="px-3 py-1.5 rounded-full bg-primary text-white text-xs font-medium hover:bg-primary-light transition-all shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+              onClick={() => login()}
+              disabled={isLoginInProgress}
+              className="px-3.5 py-1.5 rounded-full bg-primary text-white text-xs font-medium hover:bg-primary-light transition-all shadow-[0_0_10px_rgba(59,130,246,0.3)] disabled:opacity-60"
             >
-              Sign In
+              {isLoginInProgress ? 'Connecting...' : 'Sign In'}
             </button>
           )}
         </div>

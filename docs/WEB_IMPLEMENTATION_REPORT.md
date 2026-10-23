@@ -143,17 +143,24 @@ myspoti-main/
 
 ---
 
-## 7. Spotify Developer Dashboard Setup
+## 7. Spotify Developer Dashboard & Vercel Configuration (Owner-Only)
 
-To connect live Spotify accounts to WhenVanshListens:
-1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Open your registered Spotify App (or click **Create App**).
-3. In **Settings -> Redirect URIs**, add both URIs:
-   ```text
-   https://web-fawn-five-77.vercel.app/callback
-   http://localhost:3000/callback
-   ```
-4. Copy the **Client ID** and either:
-   - Enter it in Vercel Project Environment Variables as `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`, OR
-   - Enter it in WhenVanshListens Web directly when clicking "Continue with Spotify" via the built-in configuration modal.
-5. In **User Management** (if app is in Development Mode in Spotify Dashboard): add the Spotify account emails of any testers you wish to allow to log in. (Once published or extended, any Spotify user can log in).
+Ordinary visitors and users never see any API setup forms or Client ID prompts. The application owner configures the integration once:
+
+1. **Spotify Developer Dashboard**:
+   - Open your app in [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+   - Under **Settings -> Redirect URIs**, register:
+     ```text
+     https://web-fawn-five-77.vercel.app/callback
+     http://localhost:3000/callback
+     ```
+   - In **User Management** (while app is in Spotify Development Mode): add the email addresses of Spotify users who should be allowed to test/log in. (Once you request Extension Quota from Spotify, all global Spotify users can log in).
+2. **Vercel Project Environment Variable**:
+   - Under **Project Settings -> Environment Variables**, add:
+     - Key: `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`
+     - Value: `<Your Spotify Client ID>`
+     - Environments: `Production`, `Preview`, `Development`
+   - Trigger a redeploy (or run `npx vercel --prod`) to apply the environment variable to production.
+3. **Consumer-Facing Experience**:
+   - Visitors simply see the Welcome screen with the WVL waveform mark, headline *"Your music. Your universe."*, and tap **"Continue with Spotify"**.
+   - If `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` is not yet set in Vercel, the app displays a clean branded notice: *"Spotify login is temporarily unavailable. Please try again later."* without exposing developer terminology or setup forms.

@@ -6,7 +6,6 @@ const REFRESH_KEY = 'wvl_spotify_refresh_token';
 const VERIFIER_KEY = 'wvl_spotify_code_verifier';
 const STATE_KEY = 'wvl_spotify_oauth_state';
 const USER_KEY = 'wvl_spotify_user_profile';
-const CUSTOM_CLIENT_ID_KEY = 'wvl_custom_client_id';
 
 export const SPOTIFY_SCOPES = [
   'user-read-private',
@@ -17,37 +16,19 @@ export const SPOTIFY_SCOPES = [
   'user-read-recently-played',
   'user-top-read',
   'playlist-read-private',
-  'playlist-read-collaborative',
   'user-library-read',
-  'streaming',
 ].join(' ');
 
 export function getSpotifyClientId(): string | null {
-  if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || null;
   const envId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
   if (envId && envId.trim() && envId !== 'your_spotify_client_id_here') {
     return envId.trim();
   }
-  const customId = localStorage.getItem(CUSTOM_CLIENT_ID_KEY);
-  if (customId && customId.trim()) {
-    return customId.trim();
-  }
   return null;
 }
 
-export function setCustomSpotifyClientId(clientId: string): void {
-  if (typeof window === 'undefined') return;
-  const trimmed = clientId.trim();
-  if (trimmed) {
-    localStorage.setItem(CUSTOM_CLIENT_ID_KEY, trimmed);
-  } else {
-    localStorage.removeItem(CUSTOM_CLIENT_ID_KEY);
-  }
-}
-
-export function clearCustomSpotifyClientId(): void {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(CUSTOM_CLIENT_ID_KEY);
+export function isSpotifyConfigured(): boolean {
+  return !!getSpotifyClientId();
 }
 
 function generateRandomString(length: number): string {
@@ -85,14 +66,14 @@ export function getRedirectUri(): string {
   return window.location.origin + '/callback';
 }
 
-export async function initiateSpotifyLogin(overrideClientId?: string): Promise<{ ok: boolean; error?: string }> {
+export async function initiateSpotifyLogin(): Promise<{ ok: boolean; error?: string }> {
   if (typeof window === 'undefined') return { ok: false, error: 'Window unavailable' };
 
-  const clientId = overrideClientId?.trim() || getSpotifyClientId();
+  const clientId = getSpotifyClientId();
   if (!clientId) {
     return {
       ok: false,
-      error: 'CLIENT_ID_MISSING',
+      error: 'CONFIG_UNAVAILABLE',
     };
   }
 
@@ -102,12 +83,9 @@ export async function initiateSpotifyLogin(overrideClientId?: string): Promise<{
   const hashed = await sha256(codeVerifier);
   const codeChallenge = base64encode(hashed);
 
-  // Store in sessionStorage and localStorage for durability across redirects
   try {
     sessionStorage.setItem(VERIFIER_KEY, codeVerifier);
     sessionStorage.setItem(STATE_KEY, state);
-    localStorage.setItem(VERIFIER_KEY, codeVerifier);
-    localStorage.setItem(STATE_KEY, state);
   } catch (e) {
     console.warn('Storage warning during PKCE setup:', e);
   }
@@ -121,7 +99,7 @@ export async function initiateSpotifyLogin(overrideClientId?: string): Promise<{
     code_challenge: codeChallenge,
     redirect_uri: redirectUri,
     state: state,
-    show_dialog: 'true', // Ensure user selects their own account
+    show_dialog: 'true', // Always allow user to sign in to their own account
   });
 
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
@@ -143,16 +121,16 @@ export async function handleSpotifyCallback(code: string, returnedState: string 
   const redirectUri = getRedirectUri();
 
   if (!clientId) {
-    return { success: false, error: 'Spotify Client ID missing. Please configure it in settings.' };
+    return { success: false, error: 'Spotify login is temporarily unavailable.' };
   }
 
   if (!storedVerifier) {
-    return { success: false, error: 'PKCE code verifier expired or missing. Please try signing in again.' };
+    return { success: false, error: 'Authorization session expired. Please tap Continue with Spotify again.' };
   }
 
-  // Validate state to protect against CSRF attacks
+  // Validate state against CSRF
   if (storedState && returnedState && storedState !== returnedState) {
-    return { success: false, error: 'State validation failed (possible CSRF attack). Authentication aborted.' };
+    return { success: false, error: 'Security validation check failed. Please try signing in again.' };
   }
 
   try {
@@ -172,7 +150,7 @@ export async function handleSpotifyCallback(code: string, returnedState: string 
 
     if (!response.ok) {
       const errText = await response.text();
-      let msg = 'Failed to exchange token with Spotify';
+      let msg = 'Failed to connect with Spotify';
       try {
         const parsed = JSON.parse(errText);
         msg = parsed.error_description || parsed.error || msg;
@@ -248,7 +226,6 @@ export async function refreshSpotifyToken(): Promise<string | null> {
     });
 
     if (!response.ok) {
-      // Refresh token is revoked or invalid; clear session
       logoutSpotify();
       return null;
     }
