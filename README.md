@@ -103,7 +103,7 @@ Every change is in the [changelog](CHANGELOG.md).
 
 **Is it safe for my account?** Myspoti talks to Spotify the way its web player does, and you sign in on Spotify's own page. Blocking ads is still against Spotify's Terms of Use (see the disclaimer below).
 
-**"Spotify refused to play this"?** Some new or free accounts get refused by Spotify. Settings → **Export a diagnostic report** and send it on [Discord](https://discord.gg/jXKnGVFnGS) or in an [issue](https://github.com/kota-zo/myspoti/issues): it holds the app's recent log (what Spotify answered) and your phone's model, never your password or your login tokens.
+
 
 **Do downloads count in my Wrapped?** No. Songs played from a download are not reported to Spotify; they count in Myspoti's own recap only. Streamed songs and music videos count as usual.
 
@@ -151,9 +151,6 @@ npx vercel --prod
 
 WhenVanshListens is personal, free, and ad-free. Follow [@whenvanshwrites](https://www.instagram.com/whenvanshwrites/) on Instagram for updates.
 
-News, help and ideas: the [Discord server](https://discord.gg/jXKnGVFnGS). Bugs and requests: [GitHub issues](https://github.com/kota-zo/myspoti/issues).
-
-## For developers
 
 The project contains two independently deployable modules:
 1. **Android Application (`base/`)**: Jetpack Compose, Kotlin models (`:api`), headless Spotify bridge (`:api-spotify`), and Android WebView host (`:host-android`).
@@ -171,21 +168,13 @@ cd base
 Live API tests (desktop Chrome with a signed-in Web Player):
 
 ```bash
-google-chrome --user-data-dir="$HOME/.myspoti-chrome" --remote-debugging-port=9222
-./gradlew :host-cdp:test -Pcdp=http://localhost:9222
-```
+
 
 Every push builds and tests on GitHub Actions. A `v*` tag publishes a signed APK in Releases.
 
 ## Credits
 
-- UI derived from [Spotui](https://github.com/Spotui/Spotui) / [Metrolist](https://github.com/MetrolistGroup/Metrolist) (GPL-3.0); Spotui also gave the Kotlin port of the lossless resolver, the verification screen and the DASH-to-FLAC remux.
-- [SpotiFLAC](https://github.com/spotbye/SpotiFLAC) (MIT): the lossless resolving idea and its community backend protocol.
-- [SpotiFLAC Mobile](https://github.com/zarzet/SpotiFLAC-Mobile) (MIT) and its [extensions](https://github.com/zarzet/SpotiFLAC-Extension) (Apache-2.0): the signed download sessions and the Tidal / Qobuz requests.
-- [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0): music videos.
-- Lyrics: [LRCLIB](https://lrclib.net), LyricsPlus, lrc.red, Kugou and NetEase; song meanings: [Genius](https://genius.com).
-- [Material Icons](https://github.com/google/material-design-icons) (Apache 2.0) and the [Figtree](https://github.com/erikdkennedy/figtree) font (SIL OFL 1.1, see `base/licenses/`).
-
+-
 Full notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 ## License
