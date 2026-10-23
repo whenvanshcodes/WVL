@@ -210,7 +210,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) {
       setIsLoginInProgress(false);
       if (res.error === 'CONFIG_UNAVAILABLE') {
-        setAuthError('Spotify login is temporarily unavailable. Please try again in a few moments.');
+        setAuthError('Spotify integration requires NEXT_PUBLIC_SPOTIFY_CLIENT_ID configured in Vercel project environment variables. Add your Spotify Client ID in Vercel to activate login.');
       } else {
         setAuthError(res.error || 'Failed to start Spotify authorization.');
       }

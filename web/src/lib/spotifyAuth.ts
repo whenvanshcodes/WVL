@@ -86,6 +86,8 @@ export async function initiateSpotifyLogin(): Promise<{ ok: boolean; error?: str
   try {
     sessionStorage.setItem(VERIFIER_KEY, codeVerifier);
     sessionStorage.setItem(STATE_KEY, state);
+    localStorage.setItem(VERIFIER_KEY, codeVerifier);
+    localStorage.setItem(STATE_KEY, state);
   } catch (e) {
     console.warn('Storage warning during PKCE setup:', e);
   }
@@ -121,7 +123,7 @@ export async function handleSpotifyCallback(code: string, returnedState: string 
   const redirectUri = getRedirectUri();
 
   if (!clientId) {
-    return { success: false, error: 'Spotify login is temporarily unavailable.' };
+    return { success: false, error: 'Spotify Client ID is not configured in this deployment (missing NEXT_PUBLIC_SPOTIFY_CLIENT_ID).' };
   }
 
   if (!storedVerifier) {
